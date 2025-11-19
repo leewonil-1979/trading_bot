@@ -7,6 +7,7 @@ import pandas as pd
 from datetime import datetime
 import json
 import time
+from bs4 import BeautifulSoup
 
 
 class KRXStockFetcher:
@@ -43,22 +44,51 @@ class KRXStockFetcher:
                     print(f"페이지 {page} 요청 실패: {response.status_code}")
                     break
                 
-                # pandas로 HTML 테이블 파싱
-                tables = pd.read_html(response.text)
+                # BeautifulSoup으로 HTML 파싱
+                soup = BeautifulSoup(response.text, 'html.parser')
                 
-                if not tables:
+                # 종목 테이블 찾기
+                table = soup.find('table', class_='type_2')
+                if not table:
                     break
+                
+                rows = table.find('tbody').find_all('tr')
+                page_stocks = []
+                
+                for row in rows:
+                    cols = row.find_all('td')
+                    if len(cols) < 2:
+                        continue
                     
-                df = tables[1]  # 종목 정보가 있는 테이블
+                    # 종목명에서 종목코드 추출
+                    name_tag = cols[1].find('a')
+                    if not name_tag:
+                        continue
+                    
+                    href = name_tag.get('href', '')
+                    if 'code=' not in href:
+                        continue
+                    
+                    # 종목코드 추출 (예: code=005930)
+                    stock_code = href.split('code=')[1].split('&')[0]
+                    stock_name = name_tag.text.strip()
+                    
+                    # 현재가
+                    current_price = cols[2].text.strip().replace(',', '')
+                    
+                    stock_info = {
+                        '종목코드': stock_code,
+                        '종목명': stock_name,
+                        '현재가': current_price,
+                        '시장': market
+                    }
+                    page_stocks.append(stock_info)
                 
-                # 유효한 데이터만 필터링
-                df = df[df['종목명'].notna()]
-                
-                if df.empty:
+                if not page_stocks:
                     break
                 
-                stocks.append(df)
-                print(f"  페이지 {page}: {len(df)}개 종목 수집")
+                stocks.extend(page_stocks)
+                print(f"  페이지 {page}: {len(page_stocks)}개 종목 수집")
                 time.sleep(0.5)  # 서버 부하 방지
                 
             except Exception as e:
@@ -68,9 +98,8 @@ class KRXStockFetcher:
         if not stocks:
             return pd.DataFrame()
         
-        # 전체 데이터 병합
-        result = pd.concat(stocks, ignore_index=True)
-        result['시장'] = market
+        # DataFrame 생성
+        result = pd.DataFrame(stocks)
         
         print(f"[{market}] 총 {len(result)}개 종목 수집 완료\n")
         return result
@@ -87,9 +116,9 @@ class KRXStockFetcher:
         
         all_stocks = pd.concat([kospi, kosdaq], ignore_index=True)
         
-        # 종목코드 정제 (6자리 숫자로 변환)
-        if '종목코드' in all_stocks.columns:
-            all_stocks['종목코드'] = all_stocks['종목코드'].astype(str).str.zfill(6)
+        # 종목코드는 이미 6자리 형식으로 추출됨
+        print(f"\n총 {len(all_stocks)}개 종목 수집 완료")
+        print(f"코스피: {len(kospi)}개, 코스닥: {len(kosdaq)}개")
         
         return all_stocks
     

@@ -11,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from crawler.krx_list.fetch_stocks import KRXStockFetcher
 from crawler.naver_minute.bulk_collector import BulkMinuteCollector
+from crawler.naver_minute.vi_scanner import VIScanner
 from learning.preprocess.preprocess_minute import MinuteDataPreprocessor
 from learning.vi_detection.vi_detector import VIDetector
 from learning.pattern_analysis.pattern_analyzer import PatternAnalyzer
@@ -35,22 +36,66 @@ def stage1_collect_stock_list(logger):
     logger.info(f"종목 리스트 수집 완료: {len(stocks)}개 종목\n")
 
 
-def stage2_collect_minute_data(logger, timeframe='1', days_back=730, limit=None):
-    """2단계: 분봉 데이터 수집"""
+def stage2a_scan_vi_stocks(logger, scan_days=30):
+    """2-A단계: VI 종목 스캔 (최근 30일)"""
     logger.info("=" * 60)
-    logger.info(f"2단계: 분봉 데이터 수집 시작 ({timeframe}분봉, {days_back}일)")
+    logger.info(f"2-A단계: VI 종목 스캔 시작 (최근 {scan_days}일)")
     logger.info("=" * 60)
     
+    # 종목 리스트 로드
+    stock_data = load_json('./data/raw/stock_list.json')
+    stocks = stock_data['stocks']
+    
+    logger.info(f"스캔 대상: {len(stocks)}개 종목")
+    
+    # VI 스캔
+    scanner = VIScanner()
+    vi_stocks = scanner.scan_all_stocks(stocks, scan_days=scan_days, delay=1.0)
+    
+    # 결과 저장
+    scanner.save_vi_stocks(vi_stocks, output_path='./data/raw/vi_stocks.json')
+    
+    logger.info(f"VI 종목 스캔 완료: {len(vi_stocks)}개 종목 발견\n")
+    return vi_stocks
+
+
+def stage2b_collect_deep_data(logger, timeframe='1', days_back=730):
+    """2-B단계: VI 종목 딥 데이터 수집 (2년)"""
+    logger.info("=" * 60)
+    logger.info(f"2-B단계: VI 종목 딥 데이터 수집 시작 ({timeframe}분봉, {days_back}일)")
+    logger.info("=" * 60)
+    
+    # VI 종목 리스트 로드
+    vi_data = load_json('./data/raw/vi_stocks.json')
+    vi_stocks = vi_data['stocks']
+    
+    logger.info(f"수집 대상: {len(vi_stocks)}개 VI 종목")
+    
+    # 종목 리스트를 BulkCollector 형식으로 변환
+    stock_list = [
+        {'종목코드': s['stock_code'], '종목명': s['stock_name']} 
+        for s in vi_stocks
+    ]
+    
+    # 임시 CSV 생성
+    import pandas as pd
+    temp_csv = './data/raw/vi_stocks_temp.csv'
+    pd.DataFrame(stock_list).to_csv(temp_csv, index=False, encoding='utf-8-sig')
+    
+    # 딥 수집
     collector = BulkMinuteCollector()
     collector.collect_all(
         timeframe=timeframe,
         days_back=days_back,
         output_dir='./data/raw',
-        limit=limit,
-        delay=1.5
+        stock_list_path=temp_csv,
+        delay=2.0
     )
     
-    logger.info("분봉 데이터 수집 완료\n")
+    # 임시 파일 삭제
+    Path(temp_csv).unlink(missing_ok=True)
+    
+    logger.info("VI 종목 딥 데이터 수집 완료\n")
 
 
 def stage3_preprocess_data(logger):
@@ -164,9 +209,11 @@ def main():
     parser.add_argument('--timeframe', type=str, default='1', 
                         help='분봉 단위 (1 or 3)')
     parser.add_argument('--days', type=int, default=730, 
-                        help='수집 기간 (일)')
+                        help='딥 수집 기간 (일)')
+    parser.add_argument('--scan-days', type=int, default=30, 
+                        help='VI 스캔 기간 (일)')
     parser.add_argument('--limit', type=int, default=None, 
-                        help='종목 수 제한 (테스트용)')
+                        help='종목 수 제한 (테스트용, deprecated)')
     
     args = parser.parse_args()
     
@@ -183,7 +230,10 @@ def main():
             stage1_collect_stock_list(logger)
         
         if args.stage == 0 or args.stage == 2:
-            stage2_collect_minute_data(logger, args.timeframe, args.days, args.limit)
+            # 2-A: VI 스캔
+            stage2a_scan_vi_stocks(logger, scan_days=args.scan_days)
+            # 2-B: 딥 수집
+            stage2b_collect_deep_data(logger, timeframe=args.timeframe, days_back=args.days)
         
         if args.stage == 0 or args.stage == 3:
             stage3_preprocess_data(logger)

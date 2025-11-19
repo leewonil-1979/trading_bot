@@ -7,7 +7,7 @@ import pandas as pd
 from pathlib import Path
 import time
 from tqdm import tqdm
-from fetch_minute_data import NaverMinuteFetcher
+from .fetch_minute_data import NaverMinuteFetcher
 
 
 class BulkMinuteCollector:
@@ -17,17 +17,24 @@ class BulkMinuteCollector:
         self.stock_list_path = stock_list_path
         self.fetcher = NaverMinuteFetcher()
         
-    def load_stock_list(self):
+    def load_stock_list(self, path=None):
         """종목 리스트 로드"""
-        with open(self.stock_list_path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
+        list_path = path if path else self.stock_list_path
         
-        stocks = data['stocks']
+        # JSON 또는 CSV 자동 감지
+        if list_path.endswith('.json'):
+            with open(list_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            stocks = data['stocks']
+        else:  # CSV
+            df = pd.read_csv(list_path, encoding='utf-8-sig')
+            stocks = df.to_dict('records')
+        
         print(f"총 {len(stocks)}개 종목 로드")
         return stocks
     
     def collect_all(self, timeframe='1', days_back=730, output_dir='../../data/raw', 
-                    limit=None, delay=1.0):
+                    limit=None, delay=1.0, stock_list_path=None):
         """
         전체 종목 분봉 데이터 수집
         
@@ -37,8 +44,9 @@ class BulkMinuteCollector:
             output_dir (str): 저장 디렉토리
             limit (int): 수집할 종목 수 제한 (테스트용, None=전체)
             delay (float): 종목 간 대기 시간 (초)
+            stock_list_path (str): 종목 리스트 경로 (None이면 기본값 사용)
         """
-        stocks = self.load_stock_list()
+        stocks = self.load_stock_list(stock_list_path)
         
         if limit:
             stocks = stocks[:limit]
