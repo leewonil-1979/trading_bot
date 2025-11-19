@@ -7,7 +7,7 @@ import pandas as pd
 from pathlib import Path
 import time
 from tqdm import tqdm
-from .fetch_minute_data import NaverMinuteFetcher
+from .fdr_minute_fetcher import FDRMinuteFetcher
 
 
 class BulkMinuteCollector:
@@ -15,7 +15,7 @@ class BulkMinuteCollector:
     
     def __init__(self, stock_list_path='../../data/raw/stock_list.json'):
         self.stock_list_path = stock_list_path
-        self.fetcher = NaverMinuteFetcher()
+        self.fetcher = FDRMinuteFetcher()
         
     def load_stock_list(self, path=None):
         """종목 리스트 로드"""
@@ -27,10 +27,14 @@ class BulkMinuteCollector:
                 data = json.load(f)
             stocks = data['stocks']
         else:  # CSV
-            df = pd.read_csv(list_path, encoding='utf-8-sig')
+            df = pd.read_csv(list_path, encoding='utf-8-sig', dtype={'종목코드': str})
+            # 종목코드를 6자리로 패딩
+            df['종목코드'] = df['종목코드'].astype(str).str.zfill(6)
             stocks = df.to_dict('records')
         
         print(f"총 {len(stocks)}개 종목 로드")
+        if stocks:
+            print(f"샘플: {stocks[0]}")
         return stocks
     
     def collect_all(self, timeframe='1', days_back=730, output_dir='../../data/raw', 

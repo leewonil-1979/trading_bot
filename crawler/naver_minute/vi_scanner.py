@@ -2,7 +2,7 @@
 VI 스캐너: 최근 데이터로 VI 발생 종목 탐지
 """
 import pandas as pd
-from .fetch_minute_data import NaverMinuteFetcher
+from .fdr_minute_fetcher import FDRMinuteFetcher
 import time
 
 
@@ -10,7 +10,7 @@ class VIScanner:
     """VI 발생 가능성 높은 종목 스캔"""
     
     def __init__(self):
-        self.fetcher = NaverMinuteFetcher()
+        self.fetcher = FDRMinuteFetcher()
     
     def quick_scan(self, stock_code, stock_name, scan_days=30):
         """
@@ -52,33 +52,35 @@ class VIScanner:
     def _detect_vi_patterns(self, df):
         """
         간단한 VI 패턴 탐지 (빠른 스캔용)
+        일봉 기준으로 변동성이 큰 종목 탐지
         
         Returns:
-            int: 발견된 VI 패턴 수
+            int: 발견된 VI 패턴 수 (변동성 점수)
         """
-        vi_count = 0
-        
-        # 09:00 시간대 데이터만 추출
-        df['time'] = pd.to_datetime(df['timestamp']).dt.time
-        morning_data = df[df['time'].astype(str).str.startswith('09:0')]
-        
-        if len(morning_data) == 0:
+        if df is None or len(df) < 5:
             return 0
         
-        # 급등/급락 패턴 탐지
+        vi_count = 0
+        
+        # 일간 변동률 계산
         df['price_change'] = df['close'].pct_change()
+        df['daily_range'] = (df['high'] - df['low']) / df['low']
         
-        # 5% 이상 급등/급락
+        # 5% 이상 급등/급락 일수
         extreme_moves = df[abs(df['price_change']) > 0.05]
-        vi_count += len(extreme_moves)
+        vi_count += len(extreme_moves) * 2  # 가중치 2배
         
-        # 거래량 급증 (평균 대비 5배 이상)
-        if len(df) > 10:
+        # 일중 변동폭 7% 이상 (VI 가능성 높음)
+        high_volatility = df[df['daily_range'] > 0.07]
+        vi_count += len(high_volatility)
+        
+        # 거래량 급증 (평균 대비 3배 이상)
+        if len(df) > 5:
             avg_volume = df['volume'].mean()
-            volume_spikes = df[df['volume'] > avg_volume * 5]
-            vi_count += len(volume_spikes) // 2  # 거래량은 덜 가중
+            volume_spikes = df[df['volume'] > avg_volume * 3]
+            vi_count += len(volume_spikes)
         
-        return min(vi_count, 10)  # 최대 10개로 제한
+        return min(vi_count, 20)  # 최대 20점
     
     def scan_all_stocks(self, stocks, scan_days=30, delay=1.0):
         """
@@ -119,11 +121,16 @@ class VIScanner:
         
         return vi_stocks
     
-    def save_vi_stocks(self, vi_stocks, output_path='../../data/raw/vi_stocks.json'):
+    def save_vi_stocks(self, vi_stocks, output_path='./data/raw/vi_stocks.json'):
         """VI 발견 종목 저장"""
         import json
         from pathlib import Path
         from datetime import datetime
+        import os
+        
+        # 절대 경로로 변환
+        if not os.path.isabs(output_path):
+            output_path = os.path.abspath(output_path)
         
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
         

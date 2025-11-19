@@ -73,14 +73,16 @@ def stage2b_collect_deep_data(logger, timeframe='1', days_back=730):
     
     # 종목 리스트를 BulkCollector 형식으로 변환
     stock_list = [
-        {'종목코드': s['stock_code'], '종목명': s['stock_name']} 
+        {'종목코드': str(s['stock_code']).zfill(6), '종목명': s['stock_name']} 
         for s in vi_stocks
     ]
     
     # 임시 CSV 생성
     import pandas as pd
     temp_csv = './data/raw/vi_stocks_temp.csv'
-    pd.DataFrame(stock_list).to_csv(temp_csv, index=False, encoding='utf-8-sig')
+    df_temp = pd.DataFrame(stock_list)
+    df_temp['종목코드'] = df_temp['종목코드'].astype(str)
+    df_temp.to_csv(temp_csv, index=False, encoding='utf-8-sig')
     
     # 딥 수집
     collector = BulkMinuteCollector()
