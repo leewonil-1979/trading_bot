@@ -49,7 +49,7 @@ def analyze_patterns():
     
     # 고확률 예측만
     df_high = df_crash[df_crash['ai_probability'] >= 0.6].copy()
-    df_high = df_high.sort_values('ai_probability', ascending=False)
+    df_high = df_high.sort_values('ai_probability', ascending=False)  # type: ignore
     
     print(f"총 급락 352회 중 {len(df_high)}회를 매수 추천 (상위 {len(df_high)/len(df_crash)*100:.1f}%)\n")
     
