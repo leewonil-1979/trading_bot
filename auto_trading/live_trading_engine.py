@@ -20,6 +20,7 @@ import yaml
 
 import pandas as pd
 import numpy as np
+import FinanceDataReader as fdr
 
 # 프로젝트 경로
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -126,15 +127,42 @@ class LiveTradingEngine:
             )
     
     def _get_watchlist(self) -> List[tuple]:
-        """모니터링 대상 종목 (실전에서는 전체 종목 또는 필터링)"""
-        # 임시: 주요 종목만
-        return [
-            ('005930', '삼성전자'),
-            ('000660', 'SK하이닉스'),
-            ('035420', 'NAVER'),
-            ('035720', '카카오'),
-            ('051910', 'LG화학'),
-        ]
+        """
+        모니터링 대상 종목 선정
+        - 전 종목 스캔하여 급락(-9% 이상) 종목만 필터링
+        - 거래량 10만주 이상
+        """
+        try:
+            print("🔍 전 종목 시세 스캔 중...")
+            # KRX 전 종목 시세 (지연 시세)
+            df_krx = fdr.StockListing('KRX')
+            
+            # 필터링: 등락률 -9% 이하, 거래량 10만주 이상
+            # ChangesRatio 컬럼이 등락률
+            crash_stocks = df_krx[
+                (df_krx['ChagesRatio'] <= -9.0) & 
+                (df_krx['Volume'] >= 100000) &
+                (~df_krx['Name'].str.contains('ETN|ETF|스팩|우B'))  # 제외 종목
+            ]
+            
+            watchlist = []
+            for idx, row in crash_stocks.iterrows():
+                watchlist.append((row['Code'], row['Name']))
+            
+            if watchlist:
+                print(f"✨ 급락 후보 {len(watchlist)}개 발견: {[name for _, name in watchlist]}")
+            else:
+                print("💤 현재 급락 종목 없음")
+                
+            return watchlist
+            
+        except Exception as e:
+            print(f"종목 스캔 오류: {e}")
+            # 오류 시 주요 종목 리턴
+            return [
+                ('005930', '삼성전자'),
+                ('000660', 'SK하이닉스'),
+            ]
     
     # =========================================
     # 2. 주문 실행
