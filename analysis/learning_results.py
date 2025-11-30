@@ -114,7 +114,7 @@ def analyze_learning_results():
             'atr': 'ATR (변동성) - 가격 변동 폭'
         }
         
-        explanation = explanations.get(feature, '')
+        explanation = explanations.get(str(feature), '')  # type: ignore
         print(f"   {idx+1:2d}. {feature:15s} (중요도: {imp:6.1f}) - {explanation}")  # type: ignore
     
     print()

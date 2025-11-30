@@ -246,7 +246,7 @@ class FnGuideAPIClient:
         if program is not None:
             df = pd.merge_asof(
                 df.sort_values('timestamp'),
-                program[['timestamp', 'program_net']].sort_values('timestamp'),
+                program[['timestamp', 'program_net']].sort_values('timestamp'),  # type: ignore
                 on='timestamp',
                 direction='nearest'
             )

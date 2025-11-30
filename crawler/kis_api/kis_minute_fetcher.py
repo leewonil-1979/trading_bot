@@ -110,7 +110,7 @@ class KISMinuteFetcher:
             df[col] = df[col].astype(float)
         df['volume'] = df['volume'].astype(int)
         
-        return df.sort_values('timestamp').reset_index(drop=True)
+        return df.sort_values('timestamp').reset_index(drop=True)  # type: ignore
     
     def fetch_historical_minutes(self, stock_code, stock_name, days_back=730):
         """
