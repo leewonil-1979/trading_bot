@@ -1,16 +1,31 @@
 """
 VI 스캐너: 최근 데이터로 VI 발생 종목 탐지
+- 일봉 기반 변동성 스캔 (FDR)
+- 실제 분봉은 장 시간에 네이버 API로 수집
 """
 import pandas as pd
 from .fdr_minute_fetcher import FDRMinuteFetcher
+from .fetch_minute_data import NaverMinuteFetcher
+from .comprehensive_fetcher import ComprehensiveDataFetcher
 import time
+from datetime import datetime
 
 
 class VIScanner:
     """VI 발생 가능성 높은 종목 스캔"""
     
-    def __init__(self):
-        self.fetcher = FDRMinuteFetcher()
+    def __init__(self, use_realtime=False):
+        """
+        Args:
+            use_realtime: True면 네이버 실시간 API 사용 (장 시간 필수)
+                         False면 FDR 일봉 사용 (언제나 가능)
+        """
+        self.use_realtime = use_realtime
+        if use_realtime:
+            self.fetcher = NaverMinuteFetcher()
+            self.comprehensive_fetcher = ComprehensiveDataFetcher()
+        else:
+            self.fetcher = FDRMinuteFetcher()
     
     def quick_scan(self, stock_code, stock_name, scan_days=30):
         """
