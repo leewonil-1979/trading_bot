@@ -562,25 +562,49 @@ class LiveTradingEngine:
 # =========================================
 
 def main():
-    """테스트 실행"""
+    """실전 자동매매 실행"""
     engine = LiveTradingEngine()
     
-    print("\n🧪 자동매매 엔진 테스트\n")
+    print("\n🚀 자동매매 시작!\n")
+    print("장 시작: 09:00 / 장 마감: 15:30")
+    print("급락 스캔: 5분마다")
+    print("포지션 관리: 1분마다")
+    print("\nCtrl+C로 종료\n")
     
-    # 1. 급락 스캔 및 매수
-    print("1️⃣ 급락 스캔 및 매수 테스트")
-    engine.scan_and_trade()
-    
-    # 2. 포지션 관리 (5분마다 실행 가정)
-    print("\n2️⃣ 포지션 관리 테스트")
-    for i in range(3):
-        print(f"\n[{i+1}회 체크]")
-        engine.manage_positions()
-        time.sleep(1)
-    
-    # 3. 일별 리포트
-    print("\n3️⃣ 일별 리포트")
-    engine.generate_daily_report()
+    try:
+        last_scan_time = datetime.now() - timedelta(minutes=10)  # 즉시 스캔
+        last_manage_time = datetime.now()
+        
+        while True:
+            now = datetime.now()
+            
+            # 장 시간 체크 (평일 09:00~15:30)
+            if now.weekday() < 5:  # 월~금
+                if 9 <= now.hour < 15 or (now.hour == 15 and now.minute < 30):
+                    
+                    # 5분마다 급락 스캔
+                    if (now - last_scan_time).seconds >= 300:
+                        print(f"\n[{now.strftime('%H:%M:%S')}] 급락 스캔 중...")
+                        engine.scan_and_trade()
+                        last_scan_time = now
+                    
+                    # 1분마다 포지션 관리
+                    if (now - last_manage_time).seconds >= 60:
+                        print(f"[{now.strftime('%H:%M:%S')}] 포지션 체크")
+                        engine.manage_positions()
+                        last_manage_time = now
+                
+                # 장 마감 후 리포트 (15:35에 1회)
+                elif now.hour == 15 and now.minute == 35:
+                    print("\n📊 장 마감 - 일일 리포트 생성")
+                    engine.generate_daily_report()
+                    time.sleep(300)  # 5분 대기 (중복 방지)
+            
+            time.sleep(10)  # 10초마다 체크
+            
+    except KeyboardInterrupt:
+        print("\n\n⚠️ 자동매매 종료")
+        print("현재 포지션 확인 후 수동 정리 필요\n")
 
 
 if __name__ == '__main__':
